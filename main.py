@@ -1,5 +1,6 @@
-import requests
+from playwright.sync_api import sync_playwright
 import pandas as pd
+import time, random
 
 # Load Excel file
 excel_path = 'monitoringlinks.xlsx' # Whatever the Excel file is called
@@ -11,19 +12,29 @@ if 'URL' not in df.columns:
     raise ValueError("Expected a column named URL in the sheet.")
 
 
-# Loop through each link in the URL column
-for index, row in df.iterrows():
-    url = row['URL']
-    company_name = row['Company']
-    url_type = row['URL Type']
-    try:
-        print(f"\nAccessing ({company_name}, {url_type}): {url}")
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            print(f"Success: {url}")
-        else:
-            print(f"Failed with status code: {response.status_code}")
-            print({response.text[:1000]})
-    except requests.exceptions.RequestExeption as error:
-        print(f"Error accessing {url}: {error}")
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False) # Open browser
+    context = browser.new_context() # Open window
+    page = context.new_page() # Open tab
+ 
+ 
+ 
+    # Loop through each link in the URL column
+    for index, row in df.iterrows():
+        url = row['URL']
+        company_name = row['Company']
+        url_type = row['URL Type']
+        try:
+            print(f"\nAccessing ({company_name}, {url_type}): {url}")
+            time.sleep(random.uniform(2, 5))
+            response = page.goto(url, timeout=30000)
+            if response.status == 200:
+                print(f"Success: {company_name}")
+                # Here we start scraping the site
+            else:
+                print(f"Failure: Status code {response.status}")
+                print(page.content())
 
+        except Exception as error:
+            print(f" Failed to fetch {url}: {error}")
+    browser.close()

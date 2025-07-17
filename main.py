@@ -1,6 +1,5 @@
-from playwright.sync_api import sync_playwright
 import pandas as pd
-import time, random
+from curl_cffi import requests
 
 # Load Excel file
 excel_path = 'monitoringlinks.xlsx' # Whatever the Excel file is called
@@ -12,29 +11,37 @@ if 'URL' not in df.columns:
     raise ValueError("Expected a column named URL in the sheet.")
 
 
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=False) # Open browser
-    context = browser.new_context() # Open window
-    page = context.new_page() # Open tab
- 
- 
- 
-    # Loop through each link in the URL column
-    for index, row in df.iterrows():
-        url = row['URL']
-        company_name = row['Company']
-        url_type = row['URL Type']
-        try:
-            print(f"\nAccessing ({company_name}, {url_type}): {url}")
-            time.sleep(random.uniform(2, 5))
-            response = page.goto(url, timeout=30000)
-            if response.status == 200:
-                print(f"Success: {company_name}")
-                # Here we start scraping the site
-            else:
-                print(f"Failure: Status code {response.status}")
-                print(page.content())
+# Loop through each link in the URL column
+for index, row in df.iterrows():
+    url = row['URL']
+    company_name = row['Company']
+    url_type = row['URL Type']
 
-        except Exception as error:
-            print(f" Failed to fetch {url}: {error}")
-    browser.close()
+    print(f"\nAccessing ({company_name}, {url_type}): {url}")
+
+    try:
+        # Session Headers - fake browser info
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+
+        response = requests.get(
+            url, 
+            timeout=30, 
+            impersonate="chrome120", # Could replace with safari/firefox if bugging
+            headers=headers,
+        )
+
+        if response.status_code == 200:
+            print(f"Success: {company_name}")
+            # Parse response.text here
+            # Now we can start scraping the site
+        else:
+            print(f"Failure: Status code {response.status_code}")
+            print(response.text[:300])
+            break # Or retry/skip
+
+    except Exception as error:
+        print(f" Failed to fetch {url}: {error}")

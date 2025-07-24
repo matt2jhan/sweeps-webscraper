@@ -2,6 +2,8 @@ import pandas as pd
 from curl_cffi import requests
 from flask import Flask, render_template, request
 import os
+from utils.scraper import extract_items
+from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -60,13 +62,36 @@ def upload_file():
                 results += f"Success: {company_name}\n"
                 # Parse response.text here
                 # Now we can start scraping the site
+                html = response.text
+                items, error = extract_items(html, url)
+
+                if error:
+                    results += f"  ⚠️ Could not extract structured content: {error}\n" # Emojis to make it easier to see
+                    continue
+
+                previous = load_previous_snapshot(company_name, url_type)
+                new_items = detect_new_items(previous, items)
+
+                if new_items:
+                    results += f"  🆕 {len(new_items)} new item(s) found:\n"
+                    for item in new_items:
+                        results += f"    - {item['title']} ({item['timestamp']})\n"
+                        results += f"      Link: {item['link']}\n"
+                else:
+                    results += "  ✅ No new content since last check.\n"
+
+                save_snapshot(company_name, url_type, items)
+            elif response.status_code == 404: # Common errors
+                results += f" 🚨 Failure: Status code {response.status_code}. Website does not exist.\n"
+            elif response.status_code == 403:
+                results += f" 🚨 Failure: Status code {response.status_code}. Likely detected as a bot.\n"
             else:
-                results += f"Failure: Status code {response.status_code}\n"
+                results += f" 🚨 Failure: Status code {response.status_code}. Please check manually.\n"
                 print(response.text[:300])
-                break # Or retry/skip
+                 # Or retry/skip
 
         except Exception as error:
-            results += f" Failed to fetch {url}: {error}\n"
+            results += f" 🚨 Failed to fetch {url}: {error}\n"
 
     return render_template('index.html', results=results)
 

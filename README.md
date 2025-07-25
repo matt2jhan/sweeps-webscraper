@@ -9,6 +9,10 @@ Dependencies to download:
 - bs4
 - openpyxl
 
+Create directories:
+- data/snapshots/
+- uploads/
+
 Test with 
 ```
 python3 main.py

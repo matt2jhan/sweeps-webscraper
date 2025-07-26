@@ -4,6 +4,7 @@ from flask import Flask, render_template, request
 import os
 from utils.scraper import extract_items
 from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items
+from utils.fetcher import fetch_html
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -44,29 +45,14 @@ def upload_file():
         results += f"\nAccessing ({company_name}, {url_type}): {url}\n"
 
         try:
-            # Session Headers - fake browser info
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-            }
+            html, source, status_code = fetch_html(url)
 
-            response = requests.get(
-                url, 
-                timeout=30, 
-                impersonate="chrome120", # Could replace with safari/firefox if bugging
-                headers=headers,
-            )
+            if html:
+                results += f"Success ({source}): {company_name}\n"
 
-            if response.status_code == 200:
-                results += f"Success: {company_name}\n"
-                # Parse response.text here
-                # Now we can start scraping the site
-                html = response.text
                 items, error = extract_items(html, url)
-
                 if error:
-                    results += f"  ⚠️ Could not extract structured content: {error}\n" # Emojis to make it easier to see
+                    results += f"  ⚠️ Could not extract structured content: {error}\n"
                     continue
 
                 previous = load_previous_snapshot(company_name, url_type)
@@ -81,17 +67,19 @@ def upload_file():
                     results += "  ✅ No new content since last check.\n"
 
                 save_snapshot(company_name, url_type, items)
-            elif response.status_code == 404: # Common errors
-                results += f" 🚨 Failure: Status code {response.status_code}. Website does not exist.\n"
-            elif response.status_code == 403:
-                results += f" 🚨 Failure: Status code {response.status_code}. Likely detected as a bot.\n"
+
             else:
-                results += f" 🚨 Failure: Status code {response.status_code}. Please check manually.\n"
-                print(response.text[:300])
-                 # Or retry/skip
+                if status_code == 404: # Common errors
+                    results += f" 🚨 Failure: Status code {status_code}. Website does not exist.\n"
+                elif status_code == 403:
+                    results += f" 🚨 Failure: Status code {status_code}. Forbidden (bot detected).\n"
+                elif status_code:
+                    results += f" 🚨 Failure: Status code {status_code}. Please check manually.\n"
+                else:
+                    results += f" 🚨 Failed to fetch {url}. Please check URL address. Finding: {error} \n"
 
         except Exception as error:
-            results += f" 🚨 Failed to fetch {url}: {error}\n"
+            results += f" 🚨 Failed to fetch {url} from spreadsheet: {error}\n"
 
     return render_template('index.html', results=results)
 

@@ -1,3 +1,4 @@
+# To scrape the contents of a site
 from bs4 import BeautifulSoup
 from datetime import datetime
 import re

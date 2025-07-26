@@ -1,3 +1,4 @@
+# To store the data about a site
 import os
 import json
 

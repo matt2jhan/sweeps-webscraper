@@ -1,6 +1,5 @@
 # To access a site
 import cloudscraper
-import certifi
 from curl_cffi import requests
 
 def fetch_html(url):
@@ -15,7 +14,7 @@ def fetch_html(url):
         # Try curl_cffi first
         response = requests.get(
             url, 
-            timeout=30, 
+            timeout=10, 
             impersonate="chrome120", # Could replace with safari/firefox if bugging
             headers=headers
         )
@@ -38,8 +37,7 @@ def fetch_html(url):
 
         response = scraper.get(
             url, 
-            timeout=30,
-            verify=certifi.where()
+            timeout=30
         )
 
         if response.status_code == 200:

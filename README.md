@@ -8,6 +8,7 @@ Dependencies to download:
 - Flask
 - bs4
 - openpyxl
+- python-dotenv
 
 Create directories:
 - data/snapshots/

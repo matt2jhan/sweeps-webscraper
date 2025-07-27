@@ -1,6 +1,5 @@
 # To scrape the contents of a site
 from bs4 import BeautifulSoup
-from datetime import datetime
 import re
 from urllib.parse import urljoin
 
@@ -33,3 +32,21 @@ def extract_items(html_content, base_url):
         return [], "No extractable content found (possibly dynamic site or unsupported structure)"
 
     return items, None
+
+def clean_html(html):
+    """
+    Removes dynamic, frequently changing content that should not trigger a 'new update' detection.
+    """
+    if not html:
+        return ""
+
+    # Remove common timestamp patterns (e.g., '2025-07-27', '12:45 PM')
+    html = re.sub(r'\b\d{4}-\d{2}-\d{2}\b', '', html)  # ISO dates
+    html = re.sub(r'\b\d{1,2}:\d{2}(?:\s?[APMapm]{2})?\b', '', html)  # time of day
+    html = re.sub(r'\d{4}/\d{2}/\d{2}', '', html)  # alt date format
+    html = re.sub(r'(Last updated|Published on)[^<]+', '', html, flags=re.IGNORECASE)
+
+    # Optional: Remove numbers that could be dynamic (e.g., counters, views)
+    html = re.sub(r'\b\d+\b', '', html)
+
+    return html

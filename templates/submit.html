@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LCN Scraper</title>
+</head>
+<body>
+    <h1>Upload Excel File</h1>
+    <form action="/submit" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".xlsx" required><br><br>
+        <button type="submit">Start Scraping</button>
+    </form>
+
+    {% if results %}
+        <h2>Scraping Results</h2>
+        <pre>{{ results }}</pre>
+    {% endif %}
+
+    <a href="/logout">Logout</a>
+</body>
+</html>

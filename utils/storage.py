@@ -1,6 +1,7 @@
 # To store the data about a site
 import os
 import json
+import hashlib
 
 SNAPSHOT_DIR = os.path.join('data', 'snapshots')
 
@@ -21,6 +22,10 @@ def save_snapshot(company_name, url_type, data):
     with open(path, 'w') as f:
         json.dump(data, f, indent=2)
 
+def hash_item(item):
+    data = f"{item.get('title','')}|{item.get('timestamp','')}|{item.get('link','')}"
+    return hashlib.md5(data.encode('utf-8')).hexdigest()
+
 def detect_new_items(previous, current):
-    prev_titles = set(item['title'] for item in previous)
-    return [item for item in current if item['title'] not in prev_titles]
+    prev_hashes = set(hash_item(item) for item in previous)
+    return [item for item in current if hash_item(item) not in prev_hashes]

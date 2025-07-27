@@ -1,5 +1,7 @@
 .venv
-data/
-uploads/
+data/*
+!data/snapshots/.gitkeep
+uploads/*
+!uploads/.gitkeep
 utils/__pycache__
 .env

@@ -29,7 +29,7 @@ def extract_items(html_content, base_url):
             })
 
     if not items:
-        return [], "No extractable content found (possibly dynamic site or unsupported structure)"
+        return [], "No extractable content found (unsupported structure)"
 
     return items, None
 

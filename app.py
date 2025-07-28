@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import gc
 from utils.scraper import extract_items, clean_html
-from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items
+from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items, push_bulk_snapshots
 from utils.fetcher import fetch_html
 
 # --- Load environment variables ---
@@ -212,6 +212,7 @@ if uploaded_file:
         progress_bar.progress((index + 1) / total_rows)
         gc.collect()
 
+    push_bulk_snapshots()
     st.markdown("## 📊 Change Detection Results")
     for entry in results_log:
         st.markdown(entry, unsafe_allow_html=True)

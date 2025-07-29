@@ -47,65 +47,34 @@ def push_bulk_snapshots():
     if not UPDATED_FILES:
         print("✅ No snapshots to push.")
         return
-
+    
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-
-    # 1️⃣ Get latest commit SHA of branch
-    branch_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/git/ref/heads/{GITHUB_BRANCH}"
-    branch_resp = requests.get(branch_url, headers=headers).json()
-    latest_commit_sha = branch_resp["object"]["sha"]
-
-    # 2️⃣ Get the tree SHA of latest commit
-    commit_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/git/commits/{latest_commit_sha}"
-    commit_resp = requests.get(commit_url, headers=headers).json()
-    base_tree_sha = commit_resp["tree"]["sha"]
-
-    # 3️⃣ Create blobs for each updated file
-    blobs = []
+    
     for file_path in UPDATED_FILES:
         file_name = os.path.basename(file_path)
-        with open(file_path, "r") as f:
+        api_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/data/snapshots/{file_name}"
+
+        with open(file_path, "rb") as f:
             content = f.read()
+        encoded_content = base64.b64encode(content).decode("utf-8")
 
-        blob_resp = requests.post(
-            f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/git/blobs",
-            headers=headers,
-            json={"content": content, "encoding": "utf-8"}
-        ).json()
+        # Check if file exists
+        response = requests.get(api_url, headers=headers)
+        sha = response.json().get("sha") if response.status_code == 200 else None
 
-        blobs.append({
-            "path": f"data/snapshots/{file_name}",
-            "mode": "100644",
-            "type": "blob",
-            "sha": blob_resp["sha"]
-        })
-
-    # 4️⃣ Create new tree
-    tree_resp = requests.post(
-        f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/git/trees",
-        headers=headers,
-        json={"base_tree": base_tree_sha, "tree": blobs}
-    ).json()
-    new_tree_sha = tree_resp["sha"]
-
-    # 5️⃣ Create commit
-    commit_resp = requests.post(
-        f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/git/commits",
-        headers=headers,
-        json={
+        commit_data = {
             "message": "snapshots: bulk update",
-            "tree": new_tree_sha,
-            "parents": [latest_commit_sha]
+            "content": encoded_content,
+            "branch": GITHUB_BRANCH
         }
-    ).json()
-    new_commit_sha = commit_resp["sha"]
+        if sha:
+            commit_data["sha"] = sha
 
-    # 6️⃣ Update branch reference
-    update_resp = requests.patch(
-        branch_url,
-        headers=headers,
-        json={"sha": new_commit_sha}
-    )
+        put_response = requests.put(api_url, headers=headers, json=commit_data)
+        if put_response.status_code not in [200, 201]:
+            print(f"❌ Failed: {file_name} - {put_response.text}")
+        else:
+            print(f"✅ Pushed {file_name}")
 
     UPDATED_FILES.clear()
-    print("🚀 Bulk snapshots push complete (multi-file commit).")
+    print("🚀 Bulk snapshots push complete.")

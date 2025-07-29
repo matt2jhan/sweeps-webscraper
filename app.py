@@ -169,52 +169,52 @@ if uploaded_file:
     for chunk_start in range(0, total_rows, CHUNK_SIZE):
         chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
         chunk = df.iloc[chunk_start:chunk_end]
-    for index, row in chunk.iterrows():
-        url = row["url"]
-        company_name = row["company"]
-        url_type = row["url type"]
+        for index, row in chunk.iterrows():
+            url = row["url"]
+            company_name = row["company"]
+            url_type = row["url type"]
 
-        results_log.append(f"\nAccessing ({company_name}, {url_type}): {url}\n")
+            results_log.append(f"\nAccessing ({company_name}, {url_type}): {url}\n")
 
-        try:
-            html, source, status_code = fetch_html(url)
-            cleaned_html = clean_html(html)
+            try:
+                html, source, status_code = fetch_html(url)
+                cleaned_html = clean_html(html)
 
-            if html:
-                results_log.append(f"Success ({source}): {company_name}\n")
+                if html:
+                    results_log.append(f"Success ({source}): {company_name}\n")
 
-                items, error = extract_items(cleaned_html, url)
-                if error:
-                    results_log.append(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {company_name} ({url_type}): {error}\n"</div>')
-                    continue
+                    items, error = extract_items(cleaned_html, url)
+                    if error:
+                        results_log.append(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {company_name} ({url_type}): {error}\n"</div>')
+                        continue
 
-                previous = load_previous_snapshot(company_name, url_type)
-                new_items = detect_new_items(previous, items)
+                    previous = load_previous_snapshot(company_name, url_type)
+                    new_items = detect_new_items(previous, items)
 
-                if new_items:
-                    results_log.append(f'<div class="status-new">🆕 {company_name} ({url_type}) - Changed</div>')
-                    # for item in new_items:
-                    #     results_log.append(f"    - {item['title']} ({item['timestamp']})\n")
-                    #     results_log.append(f"      Link: {item['link']}\n")
+                    if new_items:
+                        results_log.append(f'<div class="status-new">🆕 {company_name} ({url_type}) - Changed</div>')
+                        # for item in new_items:
+                        #     results_log.append(f"    - {item['title']} ({item['timestamp']})\n")
+                        #     results_log.append(f"      Link: {item['link']}\n")
+                    else:
+                        results_log.append(f'<div class="status-success">✅ {company_name} ({url_type}) - No Change</div>')
+
+                    save_snapshot(company_name, url_type, items)
                 else:
-                    results_log.append(f'<div class="status-success">✅ {company_name} ({url_type}) - No Change</div>')
+                    if status_code == 404:
+                        results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Website does not exist. </div>')
+                    elif status_code == 403:
+                        results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Forbidden (bot detected).</div>')
+                    else:
+                        results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Failed to fetch, please check URL manually.</div>')
 
-                save_snapshot(company_name, url_type, items)
-            else:
-                if status_code == 404:
-                    results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Website does not exist. </div>')
-                elif status_code == 403:
-                    results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Forbidden (bot detected).</div>')
-                else:
-                    results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Failed to fetch, please check URL manually.</div>')
+            except Exception as error:
+                results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {error}</div>')
 
-        except Exception as error:
-            results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {error}</div>')
+            progress_bar.progress((index + 1) / total_rows)
+            gc.collect()
 
-        progress_bar.progress((index + 1) / total_rows)
-        gc.collect()
-
-    push_bulk_snapshots()
+        push_bulk_snapshots()
     st.markdown("## 📊 Change Detection Results")
     for entry in results_log:
         st.markdown(entry, unsafe_allow_html=True)

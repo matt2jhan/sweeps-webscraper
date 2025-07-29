@@ -9,7 +9,8 @@ from utils.fetcher import fetch_html
 
 # --- Load environment variables ---
 load_dotenv()
-PASSWORD = os.getenv("APP_PASSWORD")
+PASSWORD = os.getenv("APP_PASSWORD") or st.secrets["APP_PASSWORD"]
+CHUNK_SIZE = 10 # Num of rows processed before pushing to GitHub
 
 # --- Page Config & Styling ---
 st.set_page_config(
@@ -164,8 +165,11 @@ if uploaded_file:
     status_area = st.empty()
     results_log = []
 
-    # --- Process each row ---
-    for index, row in df.iterrows():
+    # --- Process in chunks ---
+    for chunk_start in range(0, total_rows, CHUNK_SIZE):
+        chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
+        chunk = df.iloc[chunk_start:chunk_end]
+    for index, row in chunk.iterrows():
         url = row["url"]
         company_name = row["company"]
         url_type = row["url type"]
@@ -201,17 +205,15 @@ if uploaded_file:
                     results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Website does not exist. </div>')
                 elif status_code == 403:
                     results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Forbidden (bot detected).</div>')
-                elif status_code:
-                    results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Please check manually.</div>')
                 else:
-                    results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Failed to fetch. Please check URL manually.</div>')
+                    results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Failed to fetch, please check URL manually.</div>')
 
         except Exception as error:
             results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {error}</div>')
 
         progress_bar.progress((index + 1) / total_rows)
         gc.collect()
-
+    
     st.markdown("## 📊 Change Detection Results")
     for entry in results_log:
         st.markdown(entry, unsafe_allow_html=True)

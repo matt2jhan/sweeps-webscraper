@@ -111,7 +111,7 @@ def create_sidebar():
         st.write("Monitor competitor websites for changes.")
         
         st.markdown("### 📊 Required Data Format")
-        st.write("**Excel columns needed:** `Company`, `URL`, `URL Type`")
+        st.write("**CSV columns needed:** `Company`, `URL`, `URL Type`")
 
 # --- Session State for Login ---
 if "authenticated" not in st.session_state:
@@ -167,8 +167,8 @@ if st.session_state.changes or st.session_state.no_changes or st.session_state.e
 
 uploaded_file = st.file_uploader(
     "Upload Competitor Configuration File",
-    type=['xlsx', 'xls'],
-    help="Upload Excel file containing competitor URLs",
+    type=['csv'],
+    help="Upload CSV file containing competitor URLs",
     key=f"uploaded_file_{st.session_state.uploader_key}"
 )
 

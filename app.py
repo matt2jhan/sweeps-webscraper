@@ -193,9 +193,11 @@ if uploaded_file:
 
             try:
                 html, source, status_code = fetch_html(url)
-                cleaned_html = clean_html(html)
 
                 if html:
+                    cleaned_html = clean_html(html)
+                    del html # Free memory early
+                    gc.collect()
                     results_log.append(f"Success ({source}): {company_name}\n")
 
                     items, error = extract_items(cleaned_html, url)
@@ -205,6 +207,8 @@ if uploaded_file:
 
                     previous = load_previous_snapshot(company_name, url_type)
                     new_items = detect_new_items(previous, items)
+                    del items, previous # Free memory
+                    gc.collect()
 
                     if new_items:
                         results_log.append(f'<div class="status-new">🆕 {company_name} ({url_type}) - Changed</div>')

@@ -1,6 +1,7 @@
 import streamlit as st
 from dotenv import load_dotenv
 import os
+import csv
 import gc
 from openpyxl import load_workbook
 from utils.scraper import extract_items, clean_html
@@ -171,32 +172,25 @@ uploaded_file = st.file_uploader(
     key=f"uploaded_file_{st.session_state.uploader_key}"
 )
 
-def excel_row_generator(file):
+def csv_row_generator(file):
     try:
-        wb = load_workbook(file, read_only=True, data_only=True)
+        reader = csv.DictReader(file)
     except Exception as e:
-        st.error(f"Error reading Excel file: {e}")
+        st.error(f"Error reading CSV file: {e}")
         st.stop()
-    ws = wb.active
     # Ensure required columns exist (case-insensitive)
-    headers = [cell.value.strip().lower() for cell in next(ws.iter_rows(min_row=1, max_row=1))]
     required_cols = ["url", "company", "url type"]
-    for col in required_cols:
-        if col not in headers:
-            st.error(f"Missing required column: {col}")
-            st.stop()
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if not any(row):
-            continue
-        if not row[headers.index("url")]:
-            continue
-        yield {headers[i]: row[i] for i in range(len(headers))}
+    if not required_cols.issubset(set(map(str.lower, reader.fieldnames))):
+        st.error(f"Missing required columns: {required_cols - set(reader.fieldnames)}")
+        st.stop()
+    for row in reader:
+        yield row["url"], row["company"], row["url type"]
 
 if uploaded_file:
     st.write(f"Processing file: {uploaded_file.name}")
 
     changes, no_changes, errors = [], [], []
-    rows = excel_row_generator(uploaded_file)
+    rows = csv_row_generator(uploaded_file)
     results_container = st.container()
     progress_bar = st.progress(0)
 
@@ -237,6 +231,8 @@ if uploaded_file:
                             no_changes.append(f'<div class="status-success">✅ {c} ({t}) - No Change</div>')
 
                         save_snapshot(c, t, items)
+                        del items
+                        gc.collect()
                     else:
                         if status_code == 404:
                             errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Website does not exist. </div>')

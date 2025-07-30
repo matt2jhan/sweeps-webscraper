@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import os
 import csv
 import gc
+import io
 from openpyxl import load_workbook
 from utils.scraper import extract_items, clean_html
 from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items, push_bulk_snapshots
@@ -174,18 +175,25 @@ uploaded_file = st.file_uploader(
 
 def csv_row_generator(file):
     try:
-        reader = csv.DictReader(file)
+        text = io.TextIOWrapper(file, encoding="utf-8-sig")
+        reader = csv.DictReader(text)
+        reader.fieldnames = [name.strip().lower() for name in reader.fieldnames]
     except Exception as e:
         st.error(f"Error reading CSV file: {e}")
         st.stop()
     # Ensure required columns exist (case-insensitive)
     required_cols = {"url", "company", "url type"}
-    if not required_cols.issubset(set(map(str.lower, reader.fieldnames))):
-        st.error(f"Missing required columns: {required_cols - set(reader.fieldnames)}")
+    lower_headers = set(reader.fieldnames)
+    if not required_cols.issubset(lower_headers):
+        st.error(f"Missing required columns: {required_cols - lower_headers}")
         st.stop()
     for row in reader:
-        yield row["url"], row["company"], row["url type"]
-
+        row = {k.strip().lower(): v for k, v in row.items()} # To be safe
+        yield {
+            "url": row["url"],
+            "company": row["company"], 
+            "url type": row["url type"]
+        }
 if uploaded_file:
     st.write(f"Processing file: {uploaded_file.name}")
 

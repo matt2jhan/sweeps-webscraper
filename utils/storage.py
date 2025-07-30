@@ -43,14 +43,14 @@ def detect_new_items(previous, current):
     prev_hashes = set(hash_item(item) for item in previous)
     return [item for item in current if hash_item(item) not in prev_hashes]
 
-def push_bulk_snapshots():
-    if not UPDATED_FILES:
+def push_bulk_snapshots(files):
+    if not files:
         print("✅ No snapshots to push.")
         return
     
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     
-    for file_path in UPDATED_FILES:
+    for file_path in files:
         file_name = os.path.basename(file_path)
         api_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/data/snapshots/{file_name}"
 
@@ -76,5 +76,5 @@ def push_bulk_snapshots():
         else:
             print(f"✅ Pushed {file_name}")
 
-    UPDATED_FILES.clear()
+    files.clear()
     print("🚀 Bulk snapshots push complete.")

@@ -179,7 +179,7 @@ def csv_row_generator(file):
         st.error(f"Error reading CSV file: {e}")
         st.stop()
     # Ensure required columns exist (case-insensitive)
-    required_cols = ["url", "company", "url type"]
+    required_cols = {"url", "company", "url type"}
     if not required_cols.issubset(set(map(str.lower, reader.fieldnames))):
         st.error(f"Missing required columns: {required_cols - set(reader.fieldnames)}")
         st.stop()

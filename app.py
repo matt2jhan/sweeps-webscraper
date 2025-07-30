@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import gc
 from utils.scraper import extract_items, clean_html
-from utils.storage import get_snapshot_path, load_previous_snapshot, save_snapshot, detect_new_items, push_bulk_snapshots
+from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items, push_bulk_snapshots
 from utils.fetcher import fetch_html
 
 # --- Load environment variables ---
@@ -137,10 +137,25 @@ create_header()
 create_sidebar()
 st.markdown("## 📂 Upload Configuration File")
 
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+    
+if "results_log" not in st.session_state:
+    st.session_state.results_log = []  # Stores results so they survive rerun
+
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+
+if st.session_state.results_log:
+        st.markdown("## 📊 Change Detection Results")
+        for entry in st.session_state.results_log:
+            st.markdown(entry, unsafe_allow_html=True)
+
 uploaded_file = st.file_uploader(
     "Upload Competitor Configuration File",
     type=['xlsx', 'xls'],
-    help="Upload Excel file containing competitor URLs"
+    help="Upload Excel file containing competitor URLs",
+    key=f"uploaded_file_{st.session_state.uploader_key}"
 )
 
 if uploaded_file:
@@ -215,9 +230,14 @@ if uploaded_file:
             gc.collect()
 
     push_bulk_snapshots()
-    st.markdown("## 📊 Change Detection Results")
-    for entry in results_log:
-        st.markdown(entry, unsafe_allow_html=True)
+
+    # ✅ Save results so they persist until new file is uploaded
+    st.session_state.results_log = results_log
+
+    # Clear uploader for next file
+    st.session_state.uploader_key += 1
+    st.success("✅ Processing complete. You can upload a new file now.")
+    st.rerun()
 
 # --- Logout Button ---
 if st.session_state.authenticated:

@@ -165,8 +165,6 @@ if uploaded_file:
     status_area = st.empty()
     results_log = []
 
-    UPDATED_FILES = []  # Track changed snapshots
-
     # --- Process in chunks ---
     for chunk_start in range(0, total_rows, CHUNK_SIZE):
         chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
@@ -202,7 +200,6 @@ if uploaded_file:
                         results_log.append(f'<div class="status-success">✅ {company_name} ({url_type}) - No Change</div>')
 
                     save_snapshot(company_name, url_type, items)
-                    UPDATED_FILES.append(get_snapshot_path(company_name, url_type))
                 else:
                     if status_code == 404:
                         results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Website does not exist. </div>')
@@ -217,8 +214,7 @@ if uploaded_file:
             progress_bar.progress((index + 1) / total_rows)
             gc.collect()
 
-    if UPDATED_FILES:
-        push_bulk_snapshots(UPDATED_FILES)
+    push_bulk_snapshots()
     st.markdown("## 📊 Change Detection Results")
     for entry in results_log:
         st.markdown(entry, unsafe_allow_html=True)

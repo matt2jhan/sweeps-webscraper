@@ -12,7 +12,7 @@ from utils.fetcher import fetch_html
 # --- Load environment variables ---
 load_dotenv()
 PASSWORD = os.getenv("APP_PASSWORD") or st.secrets["APP_PASSWORD"]
-CHUNK_SIZE = 5 # Num of rows processed before pushing to GitHub
+CHUNK_SIZE = 2 # Num of rows processed before pushing to GitHub
 
 # --- Page Config & Styling ---
 st.set_page_config(

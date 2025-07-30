@@ -4,6 +4,7 @@ import os
 import csv
 import gc
 import io
+import time
 from openpyxl import load_workbook
 from utils.scraper import extract_items, clean_html
 from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items, push_bulk_snapshots
@@ -198,7 +199,9 @@ if uploaded_file:
     st.write(f"Processing file: {uploaded_file.name}")
 
     changes, no_changes, errors = [], [], []
+    start = time.time()
     rows = csv_row_generator(uploaded_file)
+    st.write("File read in", time.time() - start, "seconds")
     results_container = st.container()
     progress_bar = st.progress(0)
 

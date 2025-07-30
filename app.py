@@ -211,7 +211,6 @@ if uploaded_file:
             for entry in buffer:
                 u, c, t = entry["url"], entry ["company"], entry["url type"]
                 status_box = results_container.empty()
-                status_box.markdown(f"\nAccessing ({c}, {t}): {u}\n")
 
                 try:
                     html, source, status_code = fetch_html(u)
@@ -219,12 +218,10 @@ if uploaded_file:
                     if html:
                         cleaned_html = clean_html(html)
                         del html # Free memory early
-                        status_box.markdown(f"Success ({source}): {c}\n")
 
                         items, error = extract_items(cleaned_html, u)
                         if error:
                             errors.append(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {c} ({t}): {error}\n"</div>')
-                            status_box.markdown(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {c} ({t}): {error}\n"</div>', unsafe_allow_html=True)
                             continue
 
                         previous = load_previous_snapshot(c, t)
@@ -233,29 +230,23 @@ if uploaded_file:
 
                         if new_items:
                             changes.append(f'<div class="status-new">🆕 {c} ({t}) - Changed</div>')
-                            status_box.markdown(f'<div class="status-new">🆕 {c} ({t}) - Changed</div>', unsafe_allow_html=True)
                         # for item in new_items:
                         #     results_log.append(f"    - {item['title']} ({item['timestamp']})\n")
                         #     results_log.append(f"      Link: {item['link']}\n")
                         else:
                             no_changes.append(f'<div class="status-success">✅ {c} ({t}) - No Change</div>')
-                            status_box.markdown(f'<div class="status-success">✅ {c} ({t}) - No Change</div>',unsafe_allow_html=True)
 
                         save_snapshot(c, t, items)
                     else:
                         if status_code == 404:
                             errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Website does not exist. </div>')
-                            status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Website does not exist. </div>', unsafe_allow_html=True)
                         elif status_code == 403:
                             errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Forbidden (bot detected).</div>')
-                            status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Forbidden (bot detected).</div>', unsafe_allow_html=True)
                         else:
                             errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Failed to fetch, please check URL manually.</div>')
-                            status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Failed to fetch, please check URL manually.</div>', unsafe_allow_html=True)
 
                 except Exception as error:
                     errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {error}</div>')
-                    status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {error}</div>')
                 total_processed += 1
                 progress_bar.progress(min(1.0, total_processed / (total_processed + 3)))
                 gc.collect()
@@ -266,7 +257,6 @@ if uploaded_file:
         for entry in buffer:
             u, c, t = entry["url"], entry["company"], entry["url type"]
 
-            status_box.markdown(f"\nAccessing ({c}, {t}): {u}\n")
 
             try:
                 html, source, status_code = fetch_html(u)
@@ -274,12 +264,10 @@ if uploaded_file:
                 if html:
                     cleaned_html = clean_html(html)
                     del html # Free memory early
-                    status_box.markdown(f"Success ({source}): {c}\n")
 
                     items, error = extract_items(cleaned_html, u)
                     if error:
                         errors.append(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {c} ({t}): {error}\n"</div>')
-                        status_box.markdown(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {c} ({t}): {error}\n"</div>', unsafe_allow_html=True)
                         continue
 
                     previous = load_previous_snapshot(c, t)
@@ -288,26 +276,22 @@ if uploaded_file:
 
                     if new_items:
                         changes.append(f'<div class="status-new">🆕 {c} ({t}) - Changed</div>')
-                        status_box.markdown(f'<div class="status-new">🆕 {c} ({t}) - Changed</div>', unsafe_allow_html=True)
                     else:
                         no_changes.append(f'<div class="status-success">✅ {c} ({t}) - No Change</div>')
-                        status_box.markdown(f'<div class="status-success">✅ {c} ({t}) - No Change</div>',unsafe_allow_html=True)
 
                     save_snapshot(c, t, items)
+                    del items
+                    gc.collect()
                 else:
                     if status_code == 404:
                         errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Website does not exist. </div>')
-                        status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Website does not exist. </div>', unsafe_allow_html=True)
                     elif status_code == 403:
                         errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Forbidden (bot detected).</div>')
-                        status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Forbidden (bot detected).</div>', unsafe_allow_html=True)
                     else:
                         errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Failed to fetch, please check URL manually.</div>')
-                        status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Failed to fetch, please check URL manually.</div>', unsafe_allow_html=True)
 
             except Exception as error:
                 errors.append(f'<div class="status-error">🚨 {c} ({t}) - Error {error}</div>')
-                status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {error}</div>')
             total_processed += 1
             progress_bar.progress(min(1.0, total_processed / (total_processed + 3)))
             gc.collect()

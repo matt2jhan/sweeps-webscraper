@@ -1,8 +1,8 @@
 import streamlit as st
 from dotenv import load_dotenv
 import os
-import pandas as pd
 import gc
+from openpyxl import load_workbook
 from utils.scraper import extract_items, clean_html
 from utils.storage import load_previous_snapshot, save_snapshot, detect_new_items, push_bulk_snapshots
 from utils.fetcher import fetch_html
@@ -110,10 +110,7 @@ def create_sidebar():
         st.write("Monitor competitor websites for changes.")
         
         st.markdown("### 📊 Required Data Format")
-        st.write("**Excel columns needed:**")
-        st.write("• `Company`")
-        st.write("• `URL`")
-        st.write("• `URL Type`")
+        st.write("**Excel columns needed:** `Company`, `URL`, `URL Type`")
 
 # --- Session State for Login ---
 if "authenticated" not in st.session_state:
@@ -139,17 +136,17 @@ st.markdown("## 📂 Upload Configuration File")
 
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
+
+if 'changes' in st.session_state:
+    st.markdown("## Summary")
+    st.write("### Changes")
+    st.write("\n".join(st.session_state['changes']) if st.session_state['changes'] else "No changes.")
     
-if "results_log" not in st.session_state:
-    st.session_state.results_log = []  # Stores results so they survive rerun
+    st.write("### No Changes")
+    st.write("\n".join(st.session_state['no_changes']) if st.session_state['no_changes'] else "None.")
 
-if "uploader_key" not in st.session_state:
-    st.session_state.uploader_key = 0
-
-if st.session_state.results_log:
-        st.markdown("## 📊 Change Detection Results")
-        for entry in st.session_state.results_log:
-            st.markdown(entry, unsafe_allow_html=True)
+    st.write("### Errors")
+    st.write("\n".join(st.session_state['errors']) if st.session_state['errors'] else "No errors.")
 
 uploaded_file = st.file_uploader(
     "Upload Competitor Configuration File",
@@ -158,89 +155,154 @@ uploaded_file = st.file_uploader(
     key=f"uploaded_file_{st.session_state.uploader_key}"
 )
 
-if uploaded_file:
-    st.write(f"Processing file: {uploaded_file.name}")
-
+def excel_row_generator(file):
     try:
-        df = pd.read_excel(uploaded_file)
+        wb = load_workbook(file, read_only=True, data_only=True)
     except Exception as e:
         st.error(f"Error reading Excel file: {e}")
         st.stop()
-
+    ws = wb.active
     # Ensure required columns exist (case-insensitive)
-    df.columns = df.columns.str.strip().str.lower()
+    headers = [cell.value.strip().lower() for cell in next(ws.iter_rows(min_row=1, max_row=1))]
     required_cols = ["url", "company", "url type"]
     for col in required_cols:
-        if col not in df.columns:
+        if col not in headers:
             st.error(f"Missing required column: {col}")
             st.stop()
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        yield dict(zip(headers, row))
 
-    total_rows = len(df)
+if uploaded_file:
+    st.write(f"Processing file: {uploaded_file.name}")
+
+    changes, no_changes, errors = [], [], []
+    rows = excel_row_generator(uploaded_file)
+    results_container = st.container()
     progress_bar = st.progress(0)
-    status_area = st.empty()
-    results_log = []
+
+    buffer = []
+    total_processed = 0
+    total_count = sum(1 for _ in rows)
+    uploaded_file.seek(0)
 
     # --- Process in chunks ---
-    for chunk_start in range(0, total_rows, CHUNK_SIZE):
-        chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
-        chunk = df.iloc[chunk_start:chunk_end]
-        for index, row in chunk.iterrows():
-            url = row["url"]
-            company_name = row["company"]
-            url_type = row["url type"]
+    for url, company_name, url_type in rows:
+        buffer.append((url, company_name, url_type))
+        
+        if len(buffer) >= CHUNK_SIZE:
+            for u, c, t in buffer:
+            
+                status_box = results_container.empty()
+                status_box.markdown(f"\nAccessing ({c}, {t}): {u}\n")
 
-            results_log.append(f"\nAccessing ({company_name}, {url_type}): {url}\n")
+                try:
+                    html, source, status_code = fetch_html(u)
+
+                    if html:
+                        cleaned_html = clean_html(html)
+                        del html # Free memory early
+                        gc.collect()
+                        status_box.markdown(f"Success ({source}): {company_name}\n")
+
+                        items, error = extract_items(cleaned_html, u)
+                        if error:
+                            status_box.markdown(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {c} ({t}): {error}\n"</div>', unsafe_allow_html=True)
+                            continue
+
+                        previous = load_previous_snapshot(c, t)
+                        new_items = detect_new_items(previous, items)
+                        del previous # Free memory
+                        gc.collect()
+
+                        if new_items:
+                            changes.append(f"{c} ({t})")
+                            status_box.markdown(f'<div class="status-new">🆕 {c} ({t}) - Changed</div>', unsafe_allow_html=True)
+                        # for item in new_items:
+                        #     results_log.append(f"    - {item['title']} ({item['timestamp']})\n")
+                        #     results_log.append(f"      Link: {item['link']}\n")
+                        else:
+                            no_changes.append(f"{c} ({t})")
+                            status_box.markdown(f'<div class="status-success">✅ {c} ({t}) - No Change</div>',unsafe_allow_html=True)
+
+                        save_snapshot(c, t, items)
+                    else:
+                        if status_code == 404:
+                            errors.append(f"{c} ({t}) - Error {status_code}. Website does not exist.")
+                            status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Website does not exist. </div>', unsafe_allow_html=True)
+                        elif status_code == 403:
+                            errors.append(f"{c} ({t}) - Error {status_code}. Forbidden (bot detected).")
+                            status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Forbidden (bot detected).</div>', unsafe_allow_html=True)
+                        else:
+                            errors.append(f"{c} ({t}) - Error {status_code}. Failed to fetch.")
+                            status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Failed to fetch, please check URL manually.</div>', unsafe_allow_html=True)
+
+                except Exception as error:
+                    errors.append(f"{c} ({t}) - {error}")
+                    status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {error}</div>')
+                total_processed += 1
+                progress_bar.progress(total_processed / total_count)
+                gc.collect()
+            buffer.clear()
+
+     # Process leftover rows
+    if buffer:
+        for u, c, t in buffer:
+
+            status_box = results_container.empty()
+            status_box.markdown(f"\nAccessing ({c}, {t}): {u}\n")
 
             try:
-                html, source, status_code = fetch_html(url)
+                html, source, status_code = fetch_html(u)
 
                 if html:
                     cleaned_html = clean_html(html)
                     del html # Free memory early
                     gc.collect()
-                    results_log.append(f"Success ({source}): {company_name}\n")
+                    status_box.markdown(f"Success ({source}): {company_name}\n")
 
-                    items, error = extract_items(cleaned_html, url)
+                    items, error = extract_items(cleaned_html, u)
                     if error:
-                        results_log.append(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {company_name} ({url_type}): {error}\n"</div>')
+                        status_box.markdown(f'<div class="status-error">🚨"⚠️ Could not extract structured content from {c} ({t}): {error}\n"</div>', unsafe_allow_html=True)
                         continue
 
-                    previous = load_previous_snapshot(company_name, url_type)
+                    previous = load_previous_snapshot(c, t)
                     new_items = detect_new_items(previous, items)
-                    del items, previous # Free memory
+                    del previous # Free memory
                     gc.collect()
 
                     if new_items:
-                        results_log.append(f'<div class="status-new">🆕 {company_name} ({url_type}) - Changed</div>')
-                        # for item in new_items:
-                        #     results_log.append(f"    - {item['title']} ({item['timestamp']})\n")
-                        #     results_log.append(f"      Link: {item['link']}\n")
+                        changes.append(f"{c} ({t})")
+                        status_box.markdown(f'<div class="status-new">🆕 {c} ({t}) - Changed</div>', unsafe_allow_html=True)
                     else:
-                        results_log.append(f'<div class="status-success">✅ {company_name} ({url_type}) - No Change</div>')
+                        no_changes.append(f"{c} ({t})")
+                        status_box.markdown(f'<div class="status-success">✅ {c} ({t}) - No Change</div>',unsafe_allow_html=True)
 
-                    save_snapshot(company_name, url_type, items)
+                    save_snapshot(c, t, items)
                 else:
                     if status_code == 404:
-                        results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Website does not exist. </div>')
+                        errors.append(f"{c} ({t}) - Error {status_code}. Website does not exist.")
+                        status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Website does not exist. </div>', unsafe_allow_html=True)
                     elif status_code == 403:
-                        results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Forbidden (bot detected).</div>')
+                        errors.append(f"{c} ({t}) - Error {status_code}. Forbidden (bot detected).")
+                        status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Forbidden (bot detected).</div>', unsafe_allow_html=True)
                     else:
-                        results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {status_code}. Failed to fetch, please check URL manually.</div>')
+                        errors.append(f"{c} ({t}) - Error {status_code}. Failed to fetch.")
+                        status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {status_code}. Failed to fetch, please check URL manually.</div>', unsafe_allow_html=True)
 
             except Exception as error:
-                results_log.append(f'<div class="status-error">🚨 {company_name} ({url_type}) - Error {error}</div>')
-
-            progress_bar.progress((index + 1) / total_rows)
+                errors.append(f"{c} ({t}) - {error}")
+                status_box.markdown(f'<div class="status-error">🚨 {c} ({t}) - Error {error}</div>')
+            total_processed += 1
+            progress_bar.progress(total_processed / total_count)
             gc.collect()
 
     push_bulk_snapshots()
+    st.session_state['changes'] = changes
+    st.session_state['no_changes'] = no_changes
+    st.session_state['errors'] = errors
 
-    # ✅ Save results so they persist until new file is uploaded
-    st.session_state.results_log = results_log
-
-    # Clear uploader for next file
+    # --- Reset uploader but keep results ---
     st.session_state.uploader_key += 1
-    st.success("✅ Processing complete. You can upload a new file now.")
     st.rerun()
 
 # --- Logout Button ---
